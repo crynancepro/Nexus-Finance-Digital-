@@ -1,0 +1,89 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user information and their chosen path.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "whatsapp": { "type": "string", "description": "WhatsApp number" },
+        "profileType": { "type": "string", "enum": ["student", "client"] },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "paymentStatus": { "type": "string", "enum": ["pending", "validated"] },
+        "isPaidTrading": { "type": "boolean" },
+        "isPaidWeb": { "type": "boolean" }
+      },
+      "required": ["uid", "email", "whatsapp", "profileType", "role", "paymentStatus", "createdAt", "displayName"]
+    },
+    "ContactMessage": {
+      "title": "Contact Message",
+      "description": "Messages sent via the contact form.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "whatsapp": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "message", "createdAt"]
+    },
+    "TradingAcademyData": {
+      "title": "Trading Academy Student Data",
+      "description": "Specific data for students in the Trading Academy.",
+      "type": "object",
+      "properties": {
+        "studentUid": { "type": "string" },
+        "coursesCompleted": { "type": "array", "items": { "type": "string" } },
+        "certificateIssued": { "type": "boolean" },
+        "mentoratLevel": { "type": "string", "enum": ["initiation", "pro", "vip"] }
+      }
+    },
+    "WebProject": {
+      "title": "Web Design Project",
+      "description": "Tracks the progress of a web design project for a client.",
+      "type": "object",
+      "properties": {
+        "clientUid": { "type": "string" },
+        "projectName": { "type": "string" },
+        "status": { "type": "string", "enum": ["Analyse", "Design", "Développement", "Mise en ligne"] },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Session": {
+      "title": "Trading Session",
+      "description": "Information about the next live trading session.",
+      "type": "object",
+      "properties": {
+        "nextSessionAt": { "type": "string", "format": "date-time" },
+        "topic": { "type": "string" }
+      },
+      "required": ["nextSessionAt"]
+    }
+  },
+  "firestore": {
+    "/sessions/{sessionId}": {
+      "schema": "Session",
+      "description": "Live session information."
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents."
+    },
+    "/trading_academy/{studentId}": {
+      "schema": "TradingAcademyData",
+      "description": "Student progress and data."
+    },
+    "/web_projects/{projectId}": {
+      "schema": "WebProject",
+      "description": "Web design project tracking."
+    },
+    "/contact_messages/{messageId}": {
+      "schema": "ContactMessage",
+      "description": "Messages sent via the contact form."
+    }
+  }
+}

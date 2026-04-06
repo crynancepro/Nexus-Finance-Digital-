@@ -1,0 +1,170 @@
+rules_version = '2';
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {userId} (matches Auth UID)
+// Fields:
+//   - uid: string (required)
+//   - displayName: string (required)
+//   - email: string (required)
+//   - whatsapp: string (required)
+//   - profileType: string (student | client)
+//   - role: string (user | admin)
+//   - createdAt: timestamp (required)
+//   - paymentStatus: string (pending | validated)
+//   - isPaidTrading: boolean
+//   - isPaidWeb: boolean
+//   - lastPaymentClaim: map (optional)
+//
+// Collection: trading_academy
+// Document ID: {studentId}
+// Fields:
+//   - studentUid: string (required)
+//   - coursesCompleted: list
+//   - certificateIssued: bool
+//   - mentoratLevel: string (initiation | pro | vip)
+//
+// Collection: sessions
+// Document ID: {sessionId}
+// Fields:
+//   - nextSessionAt: timestamp (required)
+//   - topic: string
+//
+// Collection: contact_messages
+// Document ID: {messageId}
+// Fields:
+//   - name: string (required)
+//   - email: string (required)
+//   - whatsapp: string
+//   - message: string (required)
+//   - createdAt: timestamp (required)
+//
+// Collection: web_projects
+// Document ID: {projectId}
+// Fields:
+//   - clientUid: string (required)
+//   - projectName: string
+//   - status: string (Analyse | Design | Développement | Mise en ligne)
+//   - lastUpdated: timestamp
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() &&
+        (
+          (request.auth.token.email == "peter25ngouala@gmail.com" && request.auth.token.email_verified == true) ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
+    }
+
+    function isValidUser(data) {
+      let requiredFields = ['uid', 'email', 'whatsapp', 'profileType', 'role', 'paymentStatus', 'createdAt', 'displayName'];
+      return data.keys().hasAll(requiredFields) &&
+             data.uid is string &&
+             data.email is string &&
+             data.displayName is string &&
+             data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             data.whatsapp is string &&
+             data.profileType in ['student', 'client'] &&
+             data.role in ['user', 'admin'] &&
+             data.paymentStatus in ['pending', 'validated'] &&
+             data.createdAt is timestamp &&
+             (!('isPaidTrading' in data) || data.isPaidTrading is bool) &&
+             (!('isPaidWeb' in data) || data.isPaidWeb is bool) &&
+             (!('lastPaymentClaim' in data) || (data.lastPaymentClaim is map && data.lastPaymentClaim.keys().hasAll(['pack', 'amount', 'timestamp'])));
+    }
+
+    function isValidTradingData(data) {
+      return data.keys().hasAll(['studentUid']) &&
+             data.studentUid is string &&
+             (!('coursesCompleted' in data) || data.coursesCompleted is list) &&
+             (!('certificateIssued' in data) || data.certificateIssued is bool) &&
+             (!('mentoratLevel' in data) || data.mentoratLevel in ['initiation', 'pro', 'vip']);
+    }
+
+    function isValidWebProject(data) {
+      return data.keys().hasAll(['clientUid', 'status']) &&
+             data.clientUid is string &&
+             data.status in ['Analyse', 'Design', 'Développement', 'Mise en ligne'] &&
+             (!('projectName' in data) || data.projectName is string) &&
+             (!('lastUpdated' in data) || data.lastUpdated is timestamp);
+    }
+
+    function isValidContactMessage(data) {
+      return data.keys().hasAll(['name', 'email', 'message', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.message is string && data.message.size() > 0 && data.message.size() < 2000 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidSession(data) {
+      return data.keys().hasAll(['nextSessionAt']) &&
+             data.nextSessionAt is timestamp &&
+             (!('topic' in data) || data.topic is string);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
+                    (request.resource.data.role == 'user' || isAdmin());
+                    
+      allow update: if isAuthenticated() && (isOwner(userId) || isAdmin()) && isValidUser(request.resource.data) &&
+                    (isAdmin() || (
+                      request.resource.data.role == resource.data.role && 
+                      request.resource.data.paymentStatus == resource.data.paymentStatus &&
+                      request.resource.data.uid == resource.data.uid &&
+                      request.resource.data.email == resource.data.email
+                    ));
+    }
+
+    match /trading_academy/{studentId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.studentUid || isAdmin());
+      allow create, update: if isAdmin() && isValidTradingData(request.resource.data);
+    }
+
+    match /web_projects/{projectId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.clientUid || isAdmin());
+      allow create, update: if isAdmin() && isValidWebProject(request.resource.data);
+    }
+
+    match /contact_messages/{messageId} {
+      allow read: if isAdmin();
+      allow create: if isValidContactMessage(request.resource.data);
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidSession(request.resource.data);
+    }
+    
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
